@@ -52,6 +52,30 @@
     margin-top: 8px; resize: vertical; min-height: 60px; display: none;
   }
   .add-form textarea:focus { border-color: #4f8cff; }
+  .add-form .image-previews {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+  }
+  .add-form .image-previews:empty { display: none; }
+  .image-preview-item {
+    position: relative; width: 80px; height: 80px; border-radius: 6px;
+    overflow: hidden; border: 1px solid #ddd;
+  }
+  .image-preview-item img {
+    width: 100%; height: 100%; object-fit: cover;
+  }
+  .image-preview-item .remove-img {
+    position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
+    border-radius: 50%; background: rgba(0,0,0,0.5); color: #fff;
+    border: none; cursor: pointer; font-size: 12px; line-height: 18px;
+    text-align: center; padding: 0;
+  }
+  .image-preview-item .remove-img:hover { background: rgba(255,59,48,0.8); }
+  .paste-hint {
+    font-size: 11px; color: #bbb; margin-top: 4px;
+  }
+  .uploading-indicator {
+    font-size: 12px; color: #4f8cff; margin-top: 4px;
+  }
   .add-form .toggle-desc {
     font-size: 12px; color: #999; cursor: pointer; margin-top: 8px;
     display: inline-block;
@@ -163,7 +187,10 @@
       <button class="btn btn-primary" onclick="addTask()">添加</button>
     </div>
     <span class="toggle-desc" onclick="toggleDesc()">+ 添加描述</span>
-    <textarea id="descInput" placeholder="需求描述（可选）..."></textarea>
+    <textarea id="descInput" placeholder="需求描述（可选）... 支持 Ctrl+V / ⌘+V 粘贴图片"></textarea>
+    <div class="image-previews" id="imagePreviews"></div>
+    <div class="paste-hint" id="pasteHint" style="display:none">📎 支持 Ctrl+V / ⌘+V 粘贴截图，图片将上传到服务端 ./images 目录</div>
+    <div class="uploading-indicator" id="uploadingIndicator" style="display:none">⏳ 图片上传中...</div>
   </div>
 
   <!-- Filter -->
@@ -190,6 +217,7 @@
   let tasks = [];
   let currentFilter = 'all';
   let refreshTimer = null;
+  let pendingImages = []; // { file, previewUrl, serverPath }
 
   // API base
   function getApiBase() {
@@ -259,7 +287,7 @@
           <div class="task-meta">
             <span>${t.created_at || ''}</span>
           </div>
-          ${t.description ? `<div class="task-desc">${esc(t.description)}</div>` : ''}
+          ${t.description ? `<div class="task-desc">${formatDesc(t.description)}</div>` : ''}
           ${t.notes ? `<div class="task-notes">📝 ${esc(t.notes)}</div>` : ''}
         </div>
         <button class="task-delete" onclick="deleteTask(${t.id})" title="删除">&times;</button>
@@ -286,7 +314,14 @@
   async function addTask() {
     const title = document.getElementById('titleInput').value.trim();
     if (!title) return;
-    const desc = document.getElementById('descInput').value.trim();
+    let desc = document.getElementById('descInput').value.trim();
+
+    // Append image paths to description
+    const uploadedImages = pendingImages.filter(img => img.serverPath);
+    if (uploadedImages.length > 0) {
+      const imagePaths = uploadedImages.map(img => img.serverPath).join('\n');
+      desc = desc ? desc + '\n\n附图:\n' + imagePaths : '附图:\n' + imagePaths;
+    }
 
     const body = { title };
     if (desc) body.description = desc;
@@ -300,6 +335,10 @@
       if (!res.ok) throw new Error('Failed');
       document.getElementById('titleInput').value = '';
       document.getElementById('descInput').value = '';
+      // Clean up image previews
+      pendingImages.forEach(img => URL.revokeObjectURL(img.previewUrl));
+      pendingImages = [];
+      renderImagePreviews();
       await fetchTasks();
     } catch(e) {
       alert('添加失败，请检查 API 连接');
@@ -336,14 +375,101 @@
   function toggleDesc() {
     const ta = document.getElementById('descInput');
     const btn = document.querySelector('.toggle-desc');
+    const hint = document.getElementById('pasteHint');
     if (ta.style.display === 'none' || !ta.style.display) {
       ta.style.display = 'block';
+      hint.style.display = 'block';
       btn.textContent = '- 收起描述';
     } else {
       ta.style.display = 'none';
+      hint.style.display = 'none';
       btn.textContent = '+ 添加描述';
     }
   }
+
+  // Image paste handling
+  async function uploadImage(file) {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const res = await fetch(getApiBase() + '/api/upload-image', {
+      method: 'POST',
+      body: formData
+    });
+    if (!res.ok) throw new Error('Upload failed');
+    const data = await res.json();
+    return data.path; // server-side relative path, e.g. "./images/xxx.png"
+  }
+
+  function renderImagePreviews() {
+    const container = document.getElementById('imagePreviews');
+    container.innerHTML = pendingImages.map((img, i) => `
+      <div class="image-preview-item">
+        <img src="${img.previewUrl}" alt="preview">
+        <button class="remove-img" onclick="removeImage(${i})">&times;</button>
+      </div>
+    `).join('');
+  }
+
+  function removeImage(index) {
+    URL.revokeObjectURL(pendingImages[index].previewUrl);
+    pendingImages.splice(index, 1);
+    renderImagePreviews();
+  }
+
+  async function handlePasteImages(items) {
+    const indicator = document.getElementById('uploadingIndicator');
+    let hasImage = false;
+
+    for (const item of items) {
+      if (item.type && item.type.startsWith('image/')) {
+        hasImage = true;
+        const file = item.getAsFile ? item.getAsFile() : item;
+        if (!file) continue;
+
+        const previewUrl = URL.createObjectURL(file);
+        const imgEntry = { file, previewUrl, serverPath: null };
+        pendingImages.push(imgEntry);
+        renderImagePreviews();
+
+        // Ensure description area is visible
+        const ta = document.getElementById('descInput');
+        if (ta.style.display === 'none' || !ta.style.display) {
+          toggleDesc();
+        }
+
+        // Upload
+        indicator.style.display = 'block';
+        try {
+          const serverPath = await uploadImage(file);
+          imgEntry.serverPath = serverPath;
+        } catch (e) {
+          alert('图片上传失败，请检查 API 是否支持 POST /api/upload-image');
+          const idx = pendingImages.indexOf(imgEntry);
+          if (idx >= 0) {
+            URL.revokeObjectURL(imgEntry.previewUrl);
+            pendingImages.splice(idx, 1);
+          }
+          renderImagePreviews();
+        }
+        indicator.style.display = 'none';
+      }
+    }
+    return hasImage;
+  }
+
+  // Listen for paste events on description textarea and title input
+  document.addEventListener('paste', async function(e) {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+
+    // Check if any image in clipboard
+    const imageItems = Array.from(items).filter(it => it.type.startsWith('image/'));
+    if (imageItems.length > 0) {
+      e.preventDefault();
+      await handlePasteImages(imageItems);
+    }
+  });
 
   // Auto refresh
   function toggleAutoRefresh() {
@@ -364,6 +490,15 @@
     const d = document.createElement('div');
     d.textContent = s || '';
     return d.innerHTML;
+  }
+
+  // Format description: escape HTML and render image paths as thumbnails
+  function formatDesc(s) {
+    if (!s) return '';
+    return esc(s).replace(/(\.\/images\/[^\s<]+\.(png|jpg|jpeg|gif|webp|bmp))/gi, function(match) {
+      const imgUrl = getApiBase() + '/' + match.replace(/^\.\//, '');
+      return `<br><img src="${imgUrl}" style="max-width:200px;max-height:150px;border-radius:4px;margin-top:4px;cursor:pointer;" onclick="window.open('${imgUrl}','_blank')" alt="附图">`;
+    });
   }
 
   // Init

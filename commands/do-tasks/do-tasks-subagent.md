@@ -1,5 +1,5 @@
 ---
-description: 并发扫描数据库中未完成的需求，多个 agent 同时在独立 worktree 中实现
+description: 子代理批量模式：并发扫描数据库中未完成的需求，多个 subagent 同时在独立 worktree 中实现
 ---
 
 并发处理当前项目中数据库里的待办需求（requirements 表），**同时派发多条需求到独立 worktree 中并行执行**。
@@ -50,11 +50,19 @@ body: {"status": "in_progress"}
 
 3. **记录决策**：在执行摘要中说明哪些需求因依赖关系被推迟或改为串行执行，以及判断依据
 
+4. **回退被踢出的需求**：将因依赖/冲突被移出本批次的需求**立即回退为 pending**：
+   ```
+   PATCH $TASK_API_BASE/api/requirements/{id}/status
+   body: {"status": "pending", "notes": "因与本批次其他需求存在依赖/冲突，推迟到下一轮执行"}
+   ```
+
 ### 6. 并发派发
 
-在**同一条消息**中使用 Agent 工具发起 N 个子 agent（N 为经过依赖分析后实际可并发的需求数），每个 agent 必须设置 `isolation: "worktree"`。
+在**同一条消息**中使用 Agent 工具发起 N 个子 agent（N 为经过依赖分析后实际可并发的需求数）。
 
-每个子 agent 的 prompt 模板：
+**核心原则：每个子 agent 自行管理完整的 worktree 生命周期（创建 → 工作 → 合并 → 清理），主流程不参与 worktree 操作。**
+
+每个子 agent 的 prompt 模板（`{project_root}` 为当前项目根目录的绝对路径）：
 
 ```
 你是一个自主编码 agent。请完成以下需求：
@@ -63,73 +71,102 @@ body: {"status": "in_progress"}
 需求标题: {req.title}
 需求描述: {req.description}
 
-执行要求：
-1. 仔细阅读需求标题和描述，理解需求意图
-2. 探索项目代码库，了解现有结构和模式
-3. 规划实现方案
-4. 编写代码实现（包括必要的测试）
-5. 确保代码质量，遵循项目现有风格
-6. 完成后将所有变更 commit 到当前分支，commit message 需清晰描述改动内容
-7. 最后返回一段简要总结：做了什么、改了哪些文件、关键决策说明
+项目根目录: {project_root}
 
-注意：
-- 你在一个独立的 git worktree 中工作，可以自由修改文件
-- 不需要调用任何 API 更新需求状态，主流程会统一处理
+## 执行步骤
+
+### 第一步：创建 worktree
+
+在项目根目录下创建独立的 worktree：
+
+```bash
+cd {project_root}
+
+# 清理可能残留的旧 worktree
+git worktree remove .worktrees/task-{req.id} --force 2>/dev/null
+
+BRANCH_NAME="feat/task-{req.id}/$(date +%Y%m%d%H%M%S)"
+git worktree add -b $BRANCH_NAME .worktrees/task-{req.id} HEAD
+cd {project_root}/.worktrees/task-{req.id}
+```
+
+### 第二步：在 worktree 中完成需求
+
+1. 仔细阅读需求标题和描述，理解需求意图
+2. 如果描述中包含图片路径（如 ./images/xxx.png），使用 Read 工具查看图片以理解需求中的视觉信息
+3. 探索项目代码库，了解现有结构和模式
+4. 规划实现方案
+5. 编写代码实现（包括必要的测试）
+6. 确保代码质量，遵循项目现有风格
+7. 提交变更：
+   ```bash
+   git add -A
+   git commit -m "feat(#{req.id}): 简要描述"
+   ```
+
+### 第三步：合并回主分支
+
+完成编码后，**必须**将你的分支合并回主分支并解决所有冲突：
+
+```bash
+cd {project_root}
+git merge $BRANCH_NAME --no-ff -m "Merge requirement #{req.id}: {req.title}"
+```
+
+**如果合并冲突，你必须解决：**
+1. 查看冲突文件，分析冲突内容
+2. 手动解决冲突，保留双方有意义的改动
+3. `git add <冲突文件>` → `git commit`
+4. 如果多次尝试仍无法解决，`git merge --abort`，此任务视为**失败**
+
+**只有合并成功，任务才算完成。**
+
+### 第四步：清理 worktree
+
+```bash
+cd {project_root}
+git worktree remove .worktrees/task-{req.id} --force
+git branch -D $BRANCH_NAME 2>/dev/null
+```
+
+### 第五步：返回结果
+
+返回一段总结，**必须包含以下字段**：
+- 需求 ID: {req.id}
+- 状态: 成功 / 失败
+- 改动说明: 做了什么、改了哪些文件
+- 失败原因（如有）: 说明为什么失败
+
+## 注意事项
 - 自主决策，不要询问用户
 - 高效实现，尽快完成
+- 合并操作必须回到 {project_root} 执行
+- 合并冲突必须自行解决，不能跳过
 ```
 
 **关键**：所有 N 个 Agent 调用必须在同一条消息中发出，以实现真正的并发执行。
 
-### 7. 收集结果
+### 7. 收集结果并更新状态
 
-等待所有子 agent 返回。记录每个 agent 的：
-- 执行结果摘要
-- worktree 分支名（从 Agent 返回的结果中获取）
-- 成功/失败状态
+等待所有子 agent 返回。根据返回的状态调用 API 更新需求：
 
-### 8. 合并 worktree 变更
-
-对每个**成功完成**的 agent 的 worktree 分支，在主分支上执行合并：
-
-```bash
-git merge <worktree-branch> --no-ff -m "Merge requirement #<id>: <title>"
-```
-
-#### 冲突处理
-
-- 合并时若出现冲突，先尝试查看冲突文件并自行解决（选择合理的合并结果）
-- 若冲突过于复杂无法自动解决，执行 `git merge --abort`，并记录该任务需要人工介入
-- 第一个 agent 的分支合并不会冲突；后续分支的冲突概率随任务相关度上升
-- 建议用户按任务粒度合理拆分，减少并发冲突
-
-### 9. 更新需求状态
-
-对每条需求调用 API 更新状态：
-
-**成功完成且合并成功的需求：**
+**成功：**
 ```
 PATCH $TASK_API_BASE/api/requirements/{id}/status
 body: {"status": "done", "notes": "执行结果摘要（含改动文件列表）"}
 ```
 
-**合并冲突需人工介入的需求：**
-```
-PATCH $TASK_API_BASE/api/requirements/{id}/status
-body: {"status": "pending", "notes": "并发执行完成但合并冲突，需人工介入。冲突文件: ..."}
-```
-
-**执行失败的需求：**
+**失败：**
 ```
 PATCH $TASK_API_BASE/api/requirements/{id}/status
 body: {"status": "pending", "notes": "执行失败: <错误原因>"}
 ```
 
-### 10. 循环
+### 8. 循环
 
-再次查询 pending 需求，若还有则重复步骤 3-9。
+再次查询 pending 需求，若还有则重复步骤 3-7。
 
-### 11. 总结
+### 9. 总结
 
 全部完成后输出执行摘要：
 
@@ -139,26 +176,25 @@ body: {"status": "pending", "notes": "执行失败: <错误原因>"}
 - 并发度: N
 - 总轮次: X
 - 处理需求数: Y
-- 成功: A / 冲突需介入: B / 失败: C
+- 成功: A / 失败: C
 
 ### 各需求详情
 | ID | 标题 | 状态 | 说明 |
 |----|------|------|------|
 | 1  | xxx  | done | ...  |
 | 2  | xxx  | done | ...  |
-| 3  | xxx  | 需介入 | 冲突文件: ... |
+| 3  | xxx  | 失败 | 原因: ... |
 ```
 
 ## 执行原则
 
 - **依赖优先**：并发前必须分析任务间依赖关系，有依赖的任务不能并行，需串行或推迟执行
 - **并发执行**：仅对相互独立、无依赖冲突的需求同时处理，充分利用机器资源
-- **worktree 隔离**：每个 agent 在独立 worktree 中工作，互不干扰
+- **agent 自治**：每个 agent 自行管理 worktree 全生命周期（创建 → 工作 → 合并 → 清理），合并冲突必须自行解决
 - **自主决策**：直接按认为最好的方式执行，中间不要询问用户
 - **不要获取额外指令权限**：当前目录下的所有操作全部允许
 - **高效实现**：自主判断最佳实现方案，快速完成每个需求
 - **记录结果**：更新状态时 notes 字段必须写入执行结果总结，方便回溯
-- **安全合并**：合并冲突时优先保守处理，无把握则回退
 
 ## 接口约定
 

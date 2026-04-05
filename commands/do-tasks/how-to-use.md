@@ -37,21 +37,24 @@
 > - PUT /api/requirements/:id — 更新需求全部字段
 > - PATCH /api/requirements/:id/status — 快速更新状态，可选 notes 字段
 > - DELETE /api/requirements/:id — 删除需求
+> - POST /api/upload-image — 上传图片（multipart/form-data，字段名 image），保存到项目目录的 ./images 下，返回相对路径
 >
 > **3. 前端 UI**
 > 在页面右下角添加一个黑色圆形浮动按钮「+」，带未完成数量的红色角标。点击后在按钮上方弹出一个悬浮小面板（不是侧边栏、不是全屏弹窗），面板宽约 360px、最大高度约 480px，点击面板外部自动关闭。面板从上到下分为四个区域：
 >
 > - **标题栏**：左侧「需求」+ 红色角标（未完成数量），右侧关闭按钮
-> - **输入区**：多行 textarea，placeholder 提示 ⌘+Enter 提交
+> - **输入区**：多行 textarea，placeholder 提示 ⌘+Enter 提交，支持 Ctrl+V / ⌘+V 粘贴截图（图片自动上传到 ./images，路径附加到需求描述中）
 > - **未完成需求列表**：显示 pending + in_progress 的需求，每条显示灰色圆点、需求文本、时间戳，按创建时间倒序排列（最新在上）；点击某条需求可以编辑内容
 > - **已完成折叠区**：默认折叠，显示「▶ 已完成」，点击后展开为「▼ 已完成」并调接口获取已完成的需求列表
 > - **底部**：居中浅灰色小字「能力支持来自 lena-777/ai-tools」，其中 lena-777/ai-tools 是可点击的链接，指向 https://github.com/lena-777/ai-tools
 >
-> **重要：请先分析项目现有的技术栈、代码结构和风格，然后在此基础上添加功能，不要引入项目中没有的框架或创建独立的新服务。实现完成后请重启/启动服务，并告知我前端访问链接。**
+> **重要：请先分析项目现有的技术栈、代码结构和风格，然后在此基础上添加功能，不要引入项目中没有的框架或创建独立的新服务。`./images` 目录需要配置为静态文件目录以支持图片访问。实现完成后请重启/启动服务，并告知我前端访问链接。**
 
 搭建完成后，将本仓库的 `commands/do-tasks/do-tasks.md` 复制到你项目的 `.claude/commands/do-tasks.md`，并把其中的 `$TASK_API_BASE` 替换为实际的 API 地址（如 `http://127.0.0.1:5001`）。
 
-如果还需要并行模式，额外复制 `commands/do-tasks/do-tasks-parallel.md` 到 `.claude/commands/do-tasks-parallel.md`。
+如果还需要并行模式，额外复制 `commands/do-tasks/do-tasks-subagent.md` 到 `.claude/commands/do-tasks-subagent.md`。
+
+如果需要团队协作模式（推荐），复制 `commands/do-tasks/do-tasks-team.md` 到 `.claude/commands/do-tasks-team.md`。
 
 ---
 
@@ -67,6 +70,7 @@
 - 配置 API 地址（页面顶部可修改，默认 `http://127.0.0.1:5001`）
 - 需求列表：显示 pending / in_progress / done 状态
 - 快速添加需求（标题 + 可选描述）
+- **粘贴图片**：在描述区域 Ctrl+V / ⌘+V 粘贴截图，自动上传到服务端 `./images` 目录，图片路径会附加在需求描述中，Claude 执行时可读取图片理解需求
 - 点击圆圈将需求标记为已完成（in_progress 状态由 Claude 自动设置，无需手动操作）
 - 删除需求
 - 按状态筛选
@@ -120,14 +124,23 @@ curl -X DELETE http://127.0.0.1:5001/api/requirements/1
 # 定时轮询：每 5 分钟检查一次新需求并自动实现
 /loop 5m /do-tasks
 
-# 并行执行：同时处理多条任务（默认 3 个 agent）
-/do-tasks-parallel
+# 批量并行执行：同时处理多条任务（默认 3 个 agent）
+/do-tasks-subagent
 
 # 指定并发度
-/do-tasks-parallel 5
+/do-tasks-subagent 5
 
-# 并行 + 定时轮询
-/loop 5m /do-tasks-parallel 3
+# 批量并行 + 定时轮询
+/loop 5m /do-tasks-subagent 3
+
+# 团队协作执行：按角色分组，智能调度（推荐）
+/do-tasks-team
+
+# 指定最大 agent 数
+/do-tasks-team 8
+
+# 团队模式 + 定时轮询
+/loop 5m /do-tasks-team 5
 ```
 
 ---
@@ -185,6 +198,22 @@ Response: {"ok": true, "message": "状态已更新"}
 - PATCH 的 `notes` 字段为可选参数
 - `status` 只接受 `pending` / `in_progress` / `done` 三个值
 
+**上传图片：**
+```
+POST /api/upload-image
+Content-Type: multipart/form-data
+
+字段: image (文件)
+
+Response: {"ok": true, "path": "./images/1712345678901.png"}
+```
+
+**说明：**
+- 图片保存到服务运行目录的 `./images/` 文件夹下
+- 文件名使用时间戳 + 随机数，避免冲突
+- 返回的 `path` 是相对于项目根目录的路径，会被附加到需求描述中
+- Claude 执行需求时会通过 Read 工具读取该路径下的图片来理解需求
+
 ---
 
 ## 目录结构
@@ -194,6 +223,7 @@ commands/do-tasks/
 ├── README.md              ← 设计说明 & 总览
 ├── how-to-use.md          ← 本文件（接入指南）
 ├── do-tasks.md            ← 串行模式 command 模板（复制到 .claude/commands/）
-├── do-tasks-parallel.md   ← 并行模式 command 模板（复制到 .claude/commands/）
+├── do-tasks-subagent.md   ← 批量并行模式 command 模板（复制到 .claude/commands/）
+├── do-tasks-team.md       ← 团队协作模式 command 模板（复制到 .claude/commands/）
 └── task-manager.html      ← 独立任务管理页（无前端时使用）
 ```

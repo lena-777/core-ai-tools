@@ -8,17 +8,24 @@ description: 扫描数据库中未完成的需求任务，逐个分析并实现
 
 1. **确认环境**：先调用 `GET $TASK_API_BASE/api/requirements?status=pending` 确认服务可访问
 2. **取最早一条**：从返回的 pending 需求列表中，按 `created_at` 升序取第一条
-3. **执行任务**：
+3. **标记执行中**：立即调用 API 标记为 `in_progress`，防止其他实例重复拾取
+   ```
+   PATCH $TASK_API_BASE/api/requirements/{id}/status
+   body: {"status": "in_progress"}
+   ```
+4. **执行任务**：
    - 阅读需求的 `title` 和 `description`，理解需求意图
+   - 如果 `description` 中包含图片路径（如 `./images/xxx.png`），使用 Read 工具查看图片以理解需求中的视觉信息（截图、设计稿、UI 参考等）
    - 规划实现方案
    - 编写代码实现
+   - 提交代码：`git add -A && git commit -m "feat(#{id}): 简要描述"`
    - 完成后调用 API 更新状态：
      ```
      PATCH $TASK_API_BASE/api/requirements/{id}/status
      body: {"status": "done", "notes": "简要说明做了什么、改了哪些文件"}
      ```
-4. **循环**：再次查询 pending 需求，取第一条，重复步骤 3，直到没有 pending 需求
-5. **总结**：全部完成后输出执行摘要（共处理 N 条，每条做了什么）
+5. **循环**：再次查询 pending 需求，取第一条，重复步骤 2-4，直到没有 pending 需求
+6. **总结**：全部完成后输出执行摘要（共处理 N 条，每条做了什么）
 
 ## 执行原则
 
@@ -33,4 +40,5 @@ description: 扫描数据库中未完成的需求任务，逐个分析并实现
 | 用途 | 方法 | 端点 | 请求体 |
 |------|------|------|--------|
 | 获取待办需求 | GET | `$TASK_API_BASE/api/requirements?status=pending` | - |
+| 标记执行中 | PATCH | `$TASK_API_BASE/api/requirements/{id}/status` | `{"status": "in_progress"}` |
 | 更新需求状态 | PATCH | `$TASK_API_BASE/api/requirements/{id}/status` | `{"status": "done", "notes": "执行结果"}` |
