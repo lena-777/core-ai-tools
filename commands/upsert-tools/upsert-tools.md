@@ -38,10 +38,10 @@ description: "安装或更新 ai-tools 中的 command/skill：给 URL 则单个 
 
 ### 1.2 检查本地是否已安装
 
-依次检查以下路径是否存在 `.tool.source.json`：
+依次检查以下路径是否存在 `.{name}.source.json`：
 
-- 多文件模式：`.claude/{type}s/{name}/.tool.source.json`
-- 单文件模式：`.claude/commands/.{name}.tool.source.json`
+- 多文件模式：`.claude/{type}s/{name}/.{name}.source.json`
+- 单文件模式：`.claude/commands/.{name}.source.json`
 
 结果：
 - **文件存在** → 已安装，记录当前 `commit` 值（`old_commit`）
@@ -49,17 +49,17 @@ description: "安装或更新 ai-tools 中的 command/skill：给 URL 则单个 
 
 ### 1.3 获取远端信息
 
-使用 WebFetch 访问 GitHub API（无需 gh CLI 或认证，公开仓库直接可用）：
+使用 `curl -sf` 通过 Bash 工具访问 GitHub API（无需 gh CLI 或认证，公开仓库直接可用）：
 
-```
+```bash
 # 列出目录内容
-WebFetch: https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={ref}
-prompt: "返回目录中所有文件的 name 和 download_url 列表"
+curl -sf "https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={ref}"
 
 # 获取最新 commit
-WebFetch: https://api.github.com/repos/{owner}/{repo}/commits?path={path}&sha={ref}&per_page=1
-prompt: "返回最新 commit 的 sha（取前7位）和 commit message"
+curl -sf "https://api.github.com/repos/{owner}/{repo}/commits?path={path}&sha={ref}&per_page=1"
 ```
+
+> **注意**：不要使用 WebFetch 访问 GitHub API，容易被 403。所有 GitHub 请求统一用 `curl -sf`。
 
 从目录列表中：
 - 识别所有文件（`.md` 及其他）
@@ -81,13 +81,10 @@ prompt: "返回最新 commit 的 sha（取前7位）和 commit message"
 
 如果远端目录中存在 `README.md` 或 `how-to-use.md`：
 
-```
-# 使用 raw.githubusercontent.com 直接获取文件原始内容
-WebFetch: https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}/README.md
-prompt: "返回文件的完整内容"
-
-WebFetch: https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}/how-to-use.md
-prompt: "返回文件的完整内容"
+```bash
+# 使用 curl 从 raw.githubusercontent.com 直接获取文件原始内容
+curl -sf "https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}/README.md"
+curl -sf "https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}/how-to-use.md"
 ```
 
 仔细阅读获取到的文档内容，重点关注：
@@ -99,11 +96,10 @@ prompt: "返回文件的完整内容"
 
 ### 1.6 下载并写入 tool 文件
 
-对每个 tool 文件，使用 raw.githubusercontent.com 直接获取原始内容：
+对每个 tool 文件，使用 `curl -sf` 从 raw.githubusercontent.com 直接获取原始内容：
 
-```
-WebFetch: https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}/{filename}
-prompt: "返回文件的完整原始内容，不做任何修改或总结"
+```bash
+curl -sf "https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}/{filename}"
 ```
 
 将获取到的内容写入本地 `.claude/{type}s/{name}/{filename}`。
@@ -111,9 +107,9 @@ prompt: "返回文件的完整原始内容，不做任何修改或总结"
 > **注意**：如果 type 是 command 且只有单个 .md 文件，则直接写为 `.claude/commands/{name}.md`（平铺，不建子目录）。
 > 如果有多个 .md 文件，则写入 `.claude/{type}s/{name}/` 目录下。
 
-### 1.7 更新 .tool.source.json
+### 1.7 更新 .{name}.source.json
 
-在本地对应位置创建或更新 `.tool.source.json`（这是本地元信息，不从远端下载）：
+在本地对应位置创建或更新 `.{name}.source.json`（这是本地元信息，不从远端下载）：
 
 ```json
 {
@@ -129,8 +125,8 @@ prompt: "返回文件的完整原始内容，不做任何修改或总结"
 ```
 
 存放位置：
-- 单文件平铺模式：`.claude/commands/.{name}.tool.source.json`
-- 多文件目录模式：`.claude/{type}s/{name}/.tool.source.json`
+- 单文件平铺模式：`.claude/commands/.{name}.source.json`
+- 多文件目录模式：`.claude/{type}s/{name}/.{name}.source.json`
 
 ### 1.8 展示结果
 
@@ -153,30 +149,29 @@ prompt: "返回文件的完整原始内容，不做任何修改或总结"
 
 ### 2.1 扫描已安装的 tools
 
-搜索以下路径的 `.tool.source.json` 文件：
+搜索以下路径的 `.source.json` 文件：
 
 ```
-.claude/commands/*/.tool.source.json
-.claude/commands/.*.tool.source.json
-.claude/skills/*/.tool.source.json
-.claude/skills/.*.tool.source.json
+.claude/commands/*/.*.source.json
+.claude/commands/.*.source.json
+.claude/skills/*/.*.source.json
+.claude/skills/.*.source.json
 ```
 
 读取每个文件，提取 `name`、`type`、`repo`、`path`、`commit`、`ref` 信息。
 
 如果没有找到任何已安装的 tool → 输出提示信息并结束。
 
-> **重要**：只处理有 `.tool.source.json` 的 tool（即通过本命令安装的）。手动复制安装的存量 tool 没有此文件，应直接忽略。如用户需要纳入管理，需先用 URL 方式重新安装。
+> **重要**：只处理有 `.{name}.source.json` 的 tool（即通过本命令安装的）。手动复制安装的存量 tool 没有此文件，应直接忽略。如用户需要纳入管理，需先用 URL 方式重新安装。
 
 ### 2.2 逐个检查远端
 
 对每个已安装的 tool：
 
-```
+```bash
 # 解析 repo 字段: github:{owner}/{repo} → owner, repo
 # 获取最新 commit
-WebFetch: https://api.github.com/repos/{owner}/{repo}/commits?path={path}&sha={ref}&per_page=1
-prompt: "返回最新 commit 的 sha（取前7位）和 commit message"
+curl -sf "https://api.github.com/repos/{owner}/{repo}/commits?path={path}&sha={ref}&per_page=1"
 ```
 
 对比本地 `commit` vs 远端最新 commit。
@@ -208,7 +203,7 @@ prompt: "返回最新 commit 的 sha（取前7位）和 commit message"
 对每个有更新的 tool，按照「单个 upsert 流程」的步骤 1.5 ~ 1.7 执行：
 1. 读取远端文档（README.md / how-to-use.md），检查依赖和适配要求
 2. 下载远端 tool 文件写入本地
-3. 更新本地 `.tool.source.json`
+3. 更新本地 `.{name}.source.json`
 4. 某个 tool 下载失败不影响其他 tool，跳过并报错
 
 ### 2.6 展示最终结果
@@ -234,21 +229,21 @@ prompt: "返回最新 commit 的 sha（取前7位）和 commit message"
 
 当参数是普通名字（如 `do-tasks`）而非完整 URL 时执行此流程。
 
-### 3.1 在本地查找 .tool.source.json
+### 3.1 在本地查找 .{name}.source.json
 
 用参数作为 `{name}`，依次检查：
 
 ```
-.claude/commands/{name}/.tool.source.json
-.claude/commands/.{name}.tool.source.json
-.claude/skills/{name}/.tool.source.json
-.claude/skills/.{name}.tool.source.json
+.claude/commands/{name}/.{name}.source.json
+.claude/commands/.{name}.source.json
+.claude/skills/{name}/.{name}.source.json
+.claude/skills/.{name}.source.json
 ```
 
 ### 3.2 判断结果
 
-- **找到 `.tool.source.json`** → 从中读取 `repo`、`path`、`ref`、`commit` 等信息，自动构造完整参数，转入**第一步：单个 upsert 流程**（从步骤 1.3 开始）
-- **未找到 `.tool.source.json`** → 提示用户该 tool 尚未通过本命令安装，请提供完整 URL：
+- **找到 `.{name}.source.json`** → 从中读取 `repo`、`path`、`ref`、`commit` 等信息，自动构造完整参数，转入**第一步：单个 upsert 流程**（从步骤 1.3 开始）
+- **未找到 `.{name}.source.json`** → 提示用户该 tool 尚未通过本命令安装，请提供完整 URL：
 
 ```
 ❓ 未找到 {name} 的安装记录。
