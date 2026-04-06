@@ -24,6 +24,7 @@ ai-tools/
 | [do-tasks](commands/do-tasks/) | 自动消费数据库需求任务 | 页面提需求 → AI 自动实现 |
 | [do-tasks-parallel](commands/do-tasks-parallel/) | 并发消费数据库需求任务 | 多 agent 独立 worktree 并行实现 |
 | [git-sync](commands/git-sync/) | 一键 git 双向同步 | 提交 + rebase 拉取 + 自动解决冲突 + 推送 |
+| [upsert-tools](commands/upsert-tools/) | 一键安装/更新 tool | 从 GitHub 仓库安装或批量更新 command/skill |
 
 ## 快速开始
 
