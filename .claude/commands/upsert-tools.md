@@ -11,13 +11,15 @@ description: "安装或更新 ai-tools 中的 command/skill：给 URL 则单个 
 从 `$ARGUMENTS` 中提取：
 
 - **URL 参数**：格式 `github:{owner}/{repo}/{type}/{name}`（如 `github:lena-777/core-ai-tools/commands/git-sync`）
+- **名字参数**：不含 `github:` 前缀的普通名字（如 `do-tasks`、`git-sync`）
 - **ref 参数**：可选，格式 `ref:{branch_or_tag}`，默认 `main`
 - **--check 标志**：如果存在，表示只检查不更新
 
 判断走哪个分支：
 
-- 有 URL 参数 → **单个 upsert 流程**（第一步）
-- 无 URL 参数 → **批量 upsert 流程**（第二步）
+- 参数以 `github:` 开头 → **单个 upsert 流程**（第一步）
+- 参数是普通名字（不含 `github:`） → **按名字查找流程**（第三步）
+- 无参数 → **批量 upsert 流程**（第二步）
 
 ---
 
@@ -218,4 +220,32 @@ gh api "repos/{owner}/{repo}/commits?path={path}&sha={ref}&per_page=1"
 ⚠️ 注意事项:
   git-sync: 需要添加权限 Bash(git fetch:*)
   simplify: 新增依赖，请先运行 npm install xxx
+```
+
+---
+
+## 第三步：按名字查找流程
+
+当参数是普通名字（如 `do-tasks`）而非完整 URL 时执行此流程。
+
+### 3.1 在本地查找 .tool.source.json
+
+用参数作为 `{name}`，依次检查：
+
+```
+.claude/commands/{name}/.tool.source.json
+.claude/commands/.{name}.tool.source.json
+.claude/skills/{name}/.tool.source.json
+.claude/skills/.{name}.tool.source.json
+```
+
+### 3.2 判断结果
+
+- **找到 `.tool.source.json`** → 从中读取 `repo`、`path`、`ref`、`commit` 等信息，自动构造完整参数，转入**第一步：单个 upsert 流程**（从步骤 1.3 开始）
+- **未找到 `.tool.source.json`** → 提示用户该 tool 尚未通过本命令安装，请提供完整 URL：
+
+```
+❓ 未找到 {name} 的安装记录。
+   请提供完整路径来安装，例如：
+   /upsert-tools github:{owner}/{repo}/commands/{name}
 ```
