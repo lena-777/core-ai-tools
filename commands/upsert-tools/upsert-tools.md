@@ -49,14 +49,16 @@ description: "安装或更新 ai-tools 中的 command/skill：给 URL 则单个 
 
 ### 1.3 获取远端信息
 
-执行以下两个 gh api 调用：
+使用 WebFetch 访问 GitHub API（无需 gh CLI 或认证，公开仓库直接可用）：
 
-```bash
+```
 # 列出目录内容
-gh api "repos/{owner}/{repo}/contents/{path}?ref={ref}"
+WebFetch: https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={ref}
+prompt: "返回目录中所有文件的 name 和 download_url 列表"
 
 # 获取最新 commit
-gh api "repos/{owner}/{repo}/commits?path={path}&sha={ref}&per_page=1"
+WebFetch: https://api.github.com/repos/{owner}/{repo}/commits?path={path}&sha={ref}&per_page=1
+prompt: "返回最新 commit 的 sha（取前7位）和 commit message"
 ```
 
 从目录列表中：
@@ -79,13 +81,16 @@ gh api "repos/{owner}/{repo}/commits?path={path}&sha={ref}&per_page=1"
 
 如果远端目录中存在 `README.md` 或 `how-to-use.md`：
 
-```bash
-# 下载并读取文档内容
-gh api "repos/{owner}/{repo}/contents/{path}/README.md?ref={ref}"
-gh api "repos/{owner}/{repo}/contents/{path}/how-to-use.md?ref={ref}"
+```
+# 使用 raw.githubusercontent.com 直接获取文件原始内容
+WebFetch: https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}/README.md
+prompt: "返回文件的完整内容"
+
+WebFetch: https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}/how-to-use.md
+prompt: "返回文件的完整内容"
 ```
 
-将 base64 content 解码后**仔细阅读**，重点关注：
+仔细阅读获取到的文档内容，重点关注：
 - ⚠️ 是否有**前置依赖**需要安装（如 npm 包、系统工具、MCP server 等）
 - ⚠️ 是否有**配置要求**（如 settings.json 权限、环境变量等）
 - ⚠️ 是否有**破坏性变更**（breaking changes）或迁移说明
@@ -94,14 +99,14 @@ gh api "repos/{owner}/{repo}/contents/{path}/how-to-use.md?ref={ref}"
 
 ### 1.6 下载并写入 tool 文件
 
-对每个 tool 文件，从远端下载：
+对每个 tool 文件，使用 raw.githubusercontent.com 直接获取原始内容：
 
-```bash
-# 获取文件内容（base64 编码）
-gh api "repos/{owner}/{repo}/contents/{path}/{filename}?ref={ref}"
+```
+WebFetch: https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}/{filename}
+prompt: "返回文件的完整原始内容，不做任何修改或总结"
 ```
 
-将返回的 `content` 字段（base64）解码后写入本地 `.claude/{type}s/{name}/{filename}`。
+将获取到的内容写入本地 `.claude/{type}s/{name}/{filename}`。
 
 > **注意**：如果 type 是 command 且只有单个 .md 文件，则直接写为 `.claude/commands/{name}.md`（平铺，不建子目录）。
 > 如果有多个 .md 文件，则写入 `.claude/{type}s/{name}/` 目录下。
@@ -167,10 +172,11 @@ gh api "repos/{owner}/{repo}/contents/{path}/{filename}?ref={ref}"
 
 对每个已安装的 tool：
 
-```bash
+```
 # 解析 repo 字段: github:{owner}/{repo} → owner, repo
 # 获取最新 commit
-gh api "repos/{owner}/{repo}/commits?path={path}&sha={ref}&per_page=1"
+WebFetch: https://api.github.com/repos/{owner}/{repo}/commits?path={path}&sha={ref}&per_page=1
+prompt: "返回最新 commit 的 sha（取前7位）和 commit message"
 ```
 
 对比本地 `commit` vs 远端最新 commit。
