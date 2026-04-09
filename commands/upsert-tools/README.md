@@ -1,6 +1,6 @@
 # upsert-tools
 
-一键安装或更新 ai-tools 仓库中的 command / skill。
+对 ai-tools 仓库中的 command / skill 进行版本管理，同步更新。
 
 ## 核心语义
 

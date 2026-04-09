@@ -9,7 +9,7 @@ ai-tools/
 ├── commands/        # AI Commands（可执行的指令）
 │   ├── do-tasks/    # 自动消费需求任务（3 种模式）
 │   ├── git-sync/    # 一键 git 双向同步
-│   └── upsert-tools/# 一键安装/更新 tool
+│   └── upsert-tools/# command/skill 版本管理与同步更新
 ├── skills/          # AI Skills（可复用的能力模块）
 │   └── frontend-design/
 └── docs/            # 通用文档（命名规范等）
@@ -34,7 +34,7 @@ ai-tools/
 | 名称 | 简介 | 适用场景 |
 |------|------|----------|
 | [git-sync](commands/git-sync/) | 一键 git 双向同步 | 提交 + rebase 拉取 + 自动解决冲突 + 推送 |
-| [upsert-tools](commands/upsert-tools/) | 一键安装/更新 tool | 给 URL 安装、给名字更新、无参数批量更新 |
+| [upsert-tools](commands/upsert-tools/) | command/skill 版本管理与同步更新 | 给 URL 安装、给名字更新、无参数批量更新 |
 
 ## Skills 索引
 

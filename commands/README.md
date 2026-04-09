@@ -12,7 +12,7 @@ Command 是一个可直接执行的 AI 指令，通常以 `/command-name` 的形
 |------|------|----------|
 | [do-tasks](do-tasks/) | 自动消费数据库需求任务（含串行/并行/团队三种模式） | 页面提需求 → AI 自动实现 |
 | [git-sync](git-sync/) | 一键 git 双向同步 | 提交 + rebase 拉取 + 自动解决冲突 + 推送 |
-| [upsert-tools](upsert-tools/) | 一键安装/更新 tool | 给 URL 安装、给名字更新、无参数批量更新 |
+| [upsert-tools](upsert-tools/) | command/skill 版本管理与同步更新 | 给 URL 安装、给名字更新、无参数批量更新 |
 
 ## 新建 Command
 
