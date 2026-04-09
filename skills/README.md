@@ -11,6 +11,7 @@ Skill 是一段可复用的 AI 能力描述，定义了 AI 在特定场景下应
 | 名称 | 简介 | 适用场景 |
 |------|------|----------|
 | [frontend-design](frontend-design/) | 极简黑白苹果玻璃风设计规范 | 前端页面生成、UI 样式修改 |
+| [wecom-notify](wecom-notify/) | 企业微信机器人 Webhook 通知 | 任务通知、构建告警、定时汇报 |
 
 ## 新建 Skill
 
