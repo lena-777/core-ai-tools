@@ -34,7 +34,7 @@
 
 ```bash
 mkdir -p your-project/.claude/skills/wecom-notify
-cp skills/wecom-notify/wecom-notify.md your-project/.claude/skills/wecom-notify/
+cp skills/wecom-notify/SKILL.md your-project/.claude/skills/wecom-notify/
 ```
 
 ## 目录结构
@@ -42,5 +42,6 @@ cp skills/wecom-notify/wecom-notify.md your-project/.claude/skills/wecom-notify/
 ```
 skills/wecom-notify/
 ├── README.md            ← 本文件（说明 & 总览）
-└── wecom-notify.md      ← skill 模板（复制到 .claude/skills/wecom-notify/）
+├── how-to-use.md        ← 安装配置指引（upsert-tools 安装时自动读取）
+└── SKILL.md             ← skill 模板（复制到 .claude/skills/wecom-notify/）
 ```

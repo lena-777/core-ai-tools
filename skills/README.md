@@ -16,5 +16,5 @@ Skill 是一段可复用的 AI 能力描述，定义了 AI 在特定场景下应
 ## 新建 Skill
 
 1. 新建一个文件夹，以 skill 名称命名（kebab-case）
-2. 填写 `README.md` 和 `skill.md`
+2. 填写 `README.md` 和 `SKILL.md`
 3. 更新本文件和根目录 `README.md` 的索引表

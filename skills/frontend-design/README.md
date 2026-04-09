@@ -39,11 +39,11 @@ frontend-design 定义了一套极简设计系统，让 AI 生成的页面风格
 
 ## 如何安装
 
-将 `skills/frontend-design/frontend-design.md` 复制到项目的 `.claude/skills/frontend-design/` 下：
+将 `skills/frontend-design/SKILL.md` 复制到项目的 `.claude/skills/frontend-design/` 下：
 
 ```bash
 mkdir -p your-project/.claude/skills/frontend-design
-cp skills/frontend-design/frontend-design.md your-project/.claude/skills/frontend-design/
+cp skills/frontend-design/SKILL.md your-project/.claude/skills/frontend-design/
 ```
 
 ## 目录结构
@@ -51,5 +51,5 @@ cp skills/frontend-design/frontend-design.md your-project/.claude/skills/fronten
 ```
 skills/frontend-design/
 ├── README.md              ← 本文件（设计说明 & 总览）
-└── frontend-design.md     ← skill 模板（复制到 .claude/skills/frontend-design/）
+└── SKILL.md               ← skill 模板（复制到 .claude/skills/frontend-design/）
 ```
